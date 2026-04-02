@@ -1,14 +1,24 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 
+// MUX (reads columns)
 const int MUX_S0  = D0;
 const int MUX_S1  = D1;
 const int MUX_S2  = D2;
 const int MUX_S3  = D3;
 const int MUX_SIG = A0;
+
+// DEMUX (drives rows)
+const int DEMUX_S0 = D4;
+const int DEMUX_S1 = D5;
+const int DEMUX_S2 = D6;
+const int DEMUX_S3 = D7;
+
 const int LED_PIN = D10;
 
-const int     NUM_SENSORS        = 16;
+const int ROWS            = 16;
+const int COLS            = 16;
+const int NUM_SENSORS     = ROWS * COLS; // 256
 const int     SAMPLE_INTERVAL_MS = 500; // read all sensors every 500 ms
 const int     ALERT_THRESHOLD    = 2500;
 
@@ -26,6 +36,13 @@ NimBLEServer*         pServer       = nullptr;
 NimBLECharacteristic* pPressureChar = nullptr;
 NimBLECharacteristic* pConfigChar   = nullptr;
 
+void selectDemuxRow(int row) {
+  digitalWrite(DEMUX_S0, (row >> 0) & 1);
+  digitalWrite(DEMUX_S1, (row >> 1) & 1);
+  digitalWrite(DEMUX_S2, (row >> 2) & 1);
+  digitalWrite(DEMUX_S3, (row >> 3) & 1);
+}
+
 uint16_t readMuxChannel(int channel) {
   digitalWrite(MUX_S0, (channel >> 0) & 1);
   digitalWrite(MUX_S1, (channel >> 1) & 1);
@@ -36,8 +53,12 @@ uint16_t readMuxChannel(int channel) {
 }
 
 void readAllSensors() {
-  for (int i = 0; i < NUM_SENSORS; i++) {
-    sensorValues[i] = readMuxChannel(i);
+  for (int row = 0; row < ROWS; row++) {
+    selectDemuxRow(row);
+    delayMicroseconds(100); // let the row settle before reading columns
+    for (int col = 0; col < COLS; col++) {
+      sensorValues[row * COLS + col] = readMuxChannel(col);
+    }
   }
 }
 
@@ -78,13 +99,16 @@ class ConfigCallback : public NimBLECharacteristicCallbacks {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(MUX_S0, OUTPUT); pinMode(MUX_S1, OUTPUT);
-  pinMode(MUX_S2, OUTPUT); pinMode(MUX_S3, OUTPUT);
+  pinMode(MUX_S0, OUTPUT);   pinMode(MUX_S1, OUTPUT);
+  pinMode(MUX_S2, OUTPUT);   pinMode(MUX_S3, OUTPUT);
+  pinMode(DEMUX_S0, OUTPUT); pinMode(DEMUX_S1, OUTPUT);
+  pinMode(DEMUX_S2, OUTPUT); pinMode(DEMUX_S3, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   analogReadResolution(12);
 
   NimBLEDevice::init("PressureMat");
+  NimBLEDevice::setMTU(517); // 512 bytes data + 5 bytes BLE overhead for 256 uint16 readings
   pServer = NimBLEDevice::createServer();
 
   NimBLEService* pService = pServer->createService(SERVICE_UUID);
