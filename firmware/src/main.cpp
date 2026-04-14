@@ -25,6 +25,13 @@ NimBLEServer*         pServer       = nullptr;
 NimBLECharacteristic* pPressureChar = nullptr;
 NimBLECharacteristic* pConfigChar   = nullptr;
 
+void selectDemuxRow(int row) {
+  digitalWrite(DEMUX_S0, (row >> 0) & 1);
+  digitalWrite(DEMUX_S1, (row >> 1) & 1);
+  digitalWrite(DEMUX_S2, (row >> 2) & 1);
+  digitalWrite(DEMUX_S3, (row >> 3) & 1);
+}
+
 uint16_t readMuxChannel(int channel) {
   digitalWrite(MUX_S0, (channel >> 0) & 1);
   digitalWrite(MUX_S1, (channel >> 1) & 1);
@@ -92,6 +99,7 @@ void setup() {
 
 
   NimBLEDevice::init("PressureMat");
+  NimBLEDevice::setMTU(517); // 512 bytes data + 5 bytes BLE overhead for 256 uint16 readings
   pServer = NimBLEDevice::createServer();
 
   NimBLEService* pService = pServer->createService(SERVICE_UUID);
