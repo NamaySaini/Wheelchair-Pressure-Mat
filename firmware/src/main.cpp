@@ -1,13 +1,12 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 
-const int MUX_S0  = D0;
-const int MUX_S1  = D1;
-const int MUX_S2  = D2;
-const int MUX_S3  = D3;
-const int MUX_SIG = A0;
+const int MUX_S0  = D2;
+const int MUX_S1  = D3;
+const int MUX_S2  = D4;
+const int MUX_S3  = D5;
+const int MUX_SIG = A6;
 const int LED_PIN = D10;
-
 const int     NUM_SENSORS        = 16;
 const int     SAMPLE_INTERVAL_MS = 500; // read all sensors every 500 ms
 const int     ALERT_THRESHOLD    = 2500;
@@ -38,7 +37,12 @@ uint16_t readMuxChannel(int channel) {
 void readAllSensors() {
   for (int i = 0; i < NUM_SENSORS; i++) {
     sensorValues[i] = readMuxChannel(i);
+    delay(100);
   }
+  // for (int i = 0; i < NUM_SENSORS; i++) {
+  //   sensorValues[i] = random(0, 4095);
+  // }
+
 }
 
 bool shouldAlert() {
@@ -66,7 +70,7 @@ void triggerAlert() {
 }
 
 class ConfigCallback : public NimBLECharacteristicCallbacks {
-  void onWrite(NimBLECharacteristic* pChar) override {
+  void onWrite(NimBLECharacteristic* pChar, NimBLEConnInfo& connInfo) override {
     std::string val = pChar->getValue();
     if (val.size() == 4) {
       memcpy(&alertIntervalMs, val.data(), 4);
@@ -77,12 +81,15 @@ class ConfigCallback : public NimBLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
-
   pinMode(MUX_S0, OUTPUT); pinMode(MUX_S1, OUTPUT);
+  digitalWrite(MUX_S0, HIGH);
   pinMode(MUX_S2, OUTPUT); pinMode(MUX_S3, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   analogReadResolution(12);
+
+  randomSeed(analogRead(A1));
+
 
   NimBLEDevice::init("PressureMat");
   pServer = NimBLEDevice::createServer();
@@ -107,13 +114,17 @@ void loop() {
     readAllSensors();
 
     Serial.print("Sensors: ");
-    for (int i = 0; i < NUM_SENSORS; i++) Serial.printf("%4d ", sensorValues[i]);
+    // Serial.printf("%4d ", readMuxChannel(8));
+    for (int i = 0; i < NUM_SENSORS; i++) {
+      Serial.printf("%4d ", sensorValues[i]);
+    }
+    Serial.printf("\nSensor 0: %4d ", sensorValues[0]);
     Serial.println();
 
-    if (pServer->getConnectedCount() > 0) {
-      pPressureChar->setValue((uint8_t*)sensorValues, NUM_SENSORS * sizeof(uint16_t));
-      pPressureChar->notify();
-    }
+    // if (pServer->getConnectedCount() > 0) {
+    //   pPressureChar->setValue((uint8_t*)sensorValues, NUM_SENSORS * sizeof(uint16_t));
+    //   pPressureChar->notify();
+    // }
 
     if (shouldAlert()) triggerAlert();
   }
