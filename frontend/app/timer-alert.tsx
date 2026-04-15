@@ -1,21 +1,45 @@
 /**
- * Timer Up! — full-screen alert overlay shown when the relief timer fires.
- * Displayed as a modal over the home screen.
+ * Timer Alert — full-screen overlay shown when the relief timer fires.
+ *
+ * Auto-closes when the user shifts their weight forward for the required
+ * duration. If the user manually dismisses, a persistent banner appears on
+ * the home screen instead.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
+import { usePressureMonitor } from '@/contexts/PressureMonitorContext';
 
 export default function TimerAlertScreen() {
   const router = useRouter();
+  const {
+    alertPhase,
+    dismissAlert,
+    shiftProgress,
+    isShiftedForward,
+    shiftDurationRequired,
+  } = usePressureMonitor();
+
+  // Auto-close when shift is complete (alertPhase goes back to 'idle')
+  useEffect(() => {
+    if (alertPhase === 'idle') {
+      router.back();
+    }
+  }, [alertPhase]);
+
+  function handleDismiss() {
+    dismissAlert(); // switches to 'dismissed' → banner shows on home screen
+    router.back();
+  }
+
+  const progressPercent = Math.round(shiftProgress * 100);
 
   return (
     <View style={styles.root}>
@@ -24,17 +48,28 @@ export default function TimerAlertScreen() {
 
       {/* Alert card */}
       <View style={styles.card}>
-        {/* Exclamation */}
+        {/* Exclamation badge */}
         <View style={styles.exclamation}>
           <Ionicons name="alert" size={20} color={Colors.white} />
         </View>
 
-        <Text style={styles.instruction}>LEAN FORWARD{'\n'}FOR 30 SEC</Text>
+        <Text style={styles.instruction}>
+          LEAN FORWARD{'\n'}FOR {shiftDurationRequired} SEC
+        </Text>
+
+        {/* Shift progress bar */}
+        {isShiftedForward && (
+          <View style={styles.progressContainer}>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            </View>
+            <Text style={styles.progressLabel}>{progressPercent}%</Text>
+          </View>
+        )}
       </View>
 
       {/* Nudge indicator */}
       <View style={styles.nudgeContainer}>
-        {/* Animated nudge text — static representation */}
         <View style={styles.nudgeCircle}>
           <Text style={styles.nudgeTextFaded}>nudge!</Text>
           <Text style={styles.nudgeText}>nudge!</Text>
@@ -44,11 +79,18 @@ export default function TimerAlertScreen() {
         {/* Close/dismiss button */}
         <TouchableOpacity
           style={styles.closeBtn}
-          onPress={() => router.back()}
+          onPress={handleDismiss}
         >
           <Ionicons name="close" size={16} color={Colors.white} />
         </TouchableOpacity>
       </View>
+
+      {/* Helper text */}
+      <Text style={styles.helperText}>
+        {isShiftedForward
+          ? 'Great — hold that position!'
+          : 'Shift forward to relieve pressure'}
+      </Text>
     </View>
   );
 }
@@ -97,6 +139,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 30,
   },
+  progressContainer: {
+    width: '100%',
+    marginTop: 12,
+    alignItems: 'center',
+    gap: 4,
+  },
+  progressTrack: {
+    width: '100%',
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: Colors.white,
+    borderRadius: 4,
+  },
+  progressLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textCream,
+  },
   nudgeContainer: {
     alignItems: 'center',
     position: 'relative',
@@ -135,5 +200,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.alertBlue,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  helperText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

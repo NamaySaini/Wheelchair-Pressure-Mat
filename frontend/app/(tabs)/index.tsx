@@ -1,18 +1,29 @@
 /**
- * Home Screen — live pressure map with soft directional guidance.
+ * Home Screen — live pressure map with BLE connection and shift-reminder banner.
  */
-import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import ScreenShell from '@/components/screen-shell';
 import PressureMap from '@/components/pressure-map';
-import { Colors } from '@/constants/theme';
-
-const GUIDANCE = 'Shift slightly forward to offload the back area';
+import { Colors, PressureColors } from '@/constants/theme';
+import { usePressureMonitor } from '@/contexts/PressureMonitorContext';
 
 export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
+  const {
+    pressureData,
+    isConnected,
+    isScanning,
+    bleError,
+    scan,
+    disconnect,
+    alertPhase,
+    shiftProgress,
+    isShiftedForward,
+  } = usePressureMonitor();
+
+  const showShiftBanner = alertPhase === 'dismissed';
 
   return (
     <>
@@ -24,15 +35,69 @@ export default function HomeScreen() {
         scrollable={false}
       >
         <View style={styles.inner}>
-          {/* Soft guidance banner */}
-          <View style={styles.guidanceBanner}>
-            <Text style={styles.guidanceText}>{GUIDANCE}</Text>
-          </View>
+          {/* Persistent shift banner — shown when alert dismissed but shift not complete */}
+          {showShiftBanner && (
+            <View style={styles.shiftBanner}>
+              <Text style={styles.shiftBannerTitle}>
+                {isShiftedForward ? 'Hold that position...' : 'Please shift your weight forward'}
+              </Text>
+              <View style={styles.shiftProgressTrack}>
+                <View
+                  style={[styles.shiftProgressFill, { width: `${shiftProgress * 100}%` }]}
+                />
+              </View>
+              <Text style={styles.shiftBannerSub}>
+                {isShiftedForward
+                  ? `${Math.round(shiftProgress * 100)}% — keep leaning forward`
+                  : 'Lean forward to relieve pressure'}
+              </Text>
+            </View>
+          )}
+
+          {/* BLE connection controls */}
+          {!isConnected && (
+            <TouchableOpacity
+              style={styles.connectBtn}
+              onPress={scan}
+              disabled={isScanning}
+              activeOpacity={0.7}
+            >
+              {isScanning ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <Text style={styles.connectBtnText}>Connect to PressureMat</Text>
+              )}
+            </TouchableOpacity>
+          )}
+          {isConnected && (
+            <TouchableOpacity
+              style={styles.disconnectBtn}
+              onPress={disconnect}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.disconnectBtnText}>Connected — Tap to Disconnect</Text>
+            </TouchableOpacity>
+          )}
+          {bleError && <Text style={styles.errorText}>{bleError}</Text>}
+
+          {/* Guidance banner (only when no shift reminder active) */}
+          {!showShiftBanner && (
+            <View style={styles.guidanceBanner}>
+              <Text style={styles.guidanceText}>
+                Shift slightly forward to offload the back area
+              </Text>
+            </View>
+          )}
 
           {/* Pressure colour key */}
           <View style={styles.keyRow}>
             <Text style={styles.keyLabel}>LOW</Text>
-            <View style={styles.pressureBar} />
+            <LinearGradient
+              colors={[PressureColors.low, PressureColors.high]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.pressureBar}
+            />
             <Text style={styles.keyLabelRight}>HIGH</Text>
           </View>
 
@@ -42,7 +107,7 @@ export default function HomeScreen() {
 
           <View style={styles.mapRow}>
             <Text style={styles.mapLR}>L</Text>
-            <PressureMap size={230} />
+            <PressureMap size={230} data={pressureData ?? undefined} />
             <Text style={styles.mapLR}>R</Text>
           </View>
 
@@ -57,9 +122,76 @@ const styles = StyleSheet.create({
   inner: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: 16,
+    paddingTop: 12,
     paddingHorizontal: 20,
   },
+  // ── Shift reminder banner ──
+  shiftBanner: {
+    backgroundColor: Colors.trackerRed,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    width: '100%',
+    marginBottom: 10,
+  },
+  shiftBannerTitle: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  shiftProgressTrack: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  shiftProgressFill: {
+    height: '100%',
+    backgroundColor: Colors.white,
+    borderRadius: 3,
+  },
+  shiftBannerSub: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  // ── BLE controls ──
+  connectBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    marginBottom: 10,
+    minWidth: 200,
+    alignItems: 'center',
+  },
+  connectBtnText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  disconnectBtn: {
+    backgroundColor: '#1B8C3A',
+    borderRadius: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  disconnectBtnText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  errorText: {
+    color: Colors.trackerRed,
+    fontSize: 12,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  // ── Guidance ──
   guidanceBanner: {
     backgroundColor: 'rgba(9,146,231,0.22)',
     borderRadius: 9,
@@ -67,13 +199,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     width: '100%',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   guidanceText: {
     fontSize: 15,
     color: Colors.textDark,
     textAlign: 'center',
   },
+  // ── Pressure bar & map ──
   keyRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -96,10 +229,6 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 14,
     borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: Colors.black,
-    // Gradient approximated as solid midpoint orange (LinearGradient would need expo-linear-gradient)
-    backgroundColor: Colors.primary,
   },
   mapTitle: {
     fontSize: 20,

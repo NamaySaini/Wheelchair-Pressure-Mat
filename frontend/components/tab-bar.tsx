@@ -1,27 +1,19 @@
 /**
- * Custom Tab Bar matching the Figma design:
- *
- *  ┌─────────────────────────────────────────────┐
- *  │  🏠   💬      [  ⏱ 0  ]       📊   ⚙️    │
- *  └─────────────────────────────────────────────┘
- *
- * The centre timer button protrudes above the dark-blue pill.
+ * Custom Tab Bar — dark-blue pill with centre timer button.
+ * Timer state comes from PressureMonitorContext.
  */
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   TouchableOpacity,
   Text,
   StyleSheet,
-  Platform,
 } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
-
-// Minutes left on the relief timer (0 = past due)
-const TIMER_VALUE = 0;
+import { usePressureMonitor } from '@/contexts/PressureMonitorContext';
 
 const TAB_ICONS: Record<string, (focused: boolean) => React.ReactNode> = {
   index: (f) => (
@@ -44,10 +36,26 @@ const TAB_ICONS: Record<string, (focused: boolean) => React.ReactNode> = {
 
 export default function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const routes = state.routes; // index, caregiver, tracker, settings
+  const routes = state.routes;
+  const left = routes.slice(0, 2);
+  const right = routes.slice(2, 4);
 
-  const left = routes.slice(0, 2);   // home, caregiver
-  const right = routes.slice(2, 4);  // tracker, settings
+  const { secondsLeft, alertPhase } = usePressureMonitor();
+  const hasNavigated = useRef(false);
+
+  const minutesLeft = Math.ceil(secondsLeft / 60);
+  const timerExpired = secondsLeft <= 0;
+
+  // Auto-navigate to timer-alert when alert fires
+  useEffect(() => {
+    if (alertPhase === 'alerting' && !hasNavigated.current) {
+      hasNavigated.current = true;
+      navigation.navigate('timer-alert');
+    }
+    if (alertPhase === 'idle') {
+      hasNavigated.current = false;
+    }
+  }, [alertPhase, navigation]);
 
   function handlePress(route: typeof routes[0], isFocused: boolean) {
     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -58,9 +66,17 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
 
   return (
     <View style={[styles.wrapper, { paddingBottom: insets.bottom + 4 }]}>
+      {/* Centre timer button */}
+      <TouchableOpacity
+        style={[styles.timerButton, timerExpired && styles.timerButtonExpired]}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('timer-alert')}
+      >
+        <Text style={styles.timerValue}>{minutesLeft}</Text>
+      </TouchableOpacity>
+
       {/* Pill */}
       <View style={styles.pill}>
-        {/* Left tabs */}
         <View style={styles.side}>
           {left.map((route) => {
             const focused = state.index === routes.indexOf(route);
@@ -76,11 +92,7 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
             );
           })}
         </View>
-
-        {/* Centre spacer (the timer button lives outside/above) */}
         <View style={styles.centre} />
-
-        {/* Right tabs */}
         <View style={styles.side}>
           {right.map((route) => {
             const focused = state.index === routes.indexOf(route);
@@ -97,38 +109,12 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
           })}
         </View>
       </View>
-
-      {/* Centre timer button – floats above the pill */}
-      <TouchableOpacity
-        style={styles.timerButton}
-        activeOpacity={0.85}
-        onPress={() => {
-          // Navigate to timer-alert modal when timer fires
-          // For now just a tap target
-        }}
-      >
-        {/* Dial ring (tick marks rendered with rotated lines) */}
-        <View style={styles.dialRing}>
-          {Array.from({ length: 32 }).map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.tick,
-                { transform: [{ rotate: `${i * (360 / 32)}deg` }] },
-              ]}
-            />
-          ))}
-        </View>
-        {/* Timer value */}
-        <Text style={styles.timerValue}>{TIMER_VALUE}</Text>
-      </TouchableOpacity>
     </View>
   );
 }
 
 const PILL_HEIGHT = 64;
 const TIMER_SIZE = 68;
-const TIMER_OVERLAP = 28; // how much button protrudes above pill
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -137,7 +123,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    // No background — the pill handles it
   },
   pill: {
     flexDirection: 'row',
@@ -166,7 +151,8 @@ const styles = StyleSheet.create({
   },
   timerButton: {
     position: 'absolute',
-    top: -(TIMER_SIZE / 2 + TIMER_OVERLAP / 2),
+    top: -TIMER_SIZE / 2 + PILL_HEIGHT / 2 - 14,
+    zIndex: 10,
     width: TIMER_SIZE,
     height: TIMER_SIZE,
     borderRadius: TIMER_SIZE / 2,
@@ -179,24 +165,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  dialRing: {
-    position: 'absolute',
-    width: TIMER_SIZE,
-    height: TIMER_SIZE,
-    alignItems: 'center',
-  },
-  tick: {
-    position: 'absolute',
-    top: 2,
-    width: 1.5,
-    height: 6,
-    backgroundColor: 'rgba(255,242,228,0.6)',
-    borderRadius: 1,
-    transformOrigin: `0.75px ${TIMER_SIZE / 2 - 2}px`,
+  timerButtonExpired: {
+    backgroundColor: Colors.trackerRed,
   },
   timerValue: {
     fontSize: 28,
-    fontWeight: '400',
+    fontWeight: '600',
     color: Colors.white,
     lineHeight: 32,
   },
