@@ -25,12 +25,12 @@ NimBLEServer*         pServer       = nullptr;
 NimBLECharacteristic* pPressureChar = nullptr;
 NimBLECharacteristic* pConfigChar   = nullptr;
 
-void selectDemuxRow(int row) {
-  digitalWrite(DEMUX_S0, (row >> 0) & 1);
-  digitalWrite(DEMUX_S1, (row >> 1) & 1);
-  digitalWrite(DEMUX_S2, (row >> 2) & 1);
-  digitalWrite(DEMUX_S3, (row >> 3) & 1);
-}
+// void selectDemuxRow(int row) {
+//   digitalWrite(DEMUX_S0, (row >> 0) & 1);
+//   digitalWrite(DEMUX_S1, (row >> 1) & 1);
+//   digitalWrite(DEMUX_S2, (row >> 2) & 1);
+//   digitalWrite(DEMUX_S3, (row >> 3) & 1);
+// }
 
 uint16_t readMuxChannel(int channel) {
   digitalWrite(MUX_S0, (channel >> 0) & 1);
@@ -88,9 +88,11 @@ class ConfigCallback : public NimBLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
-  pinMode(MUX_S0, OUTPUT); pinMode(MUX_S1, OUTPUT);
+  pinMode(MUX_S0, OUTPUT); 
+  pinMode(MUX_S1, OUTPUT);
   digitalWrite(MUX_S0, HIGH);
-  pinMode(MUX_S2, OUTPUT); pinMode(MUX_S3, OUTPUT);
+  pinMode(MUX_S2, OUTPUT); 
+  pinMode(MUX_S3, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   analogReadResolution(12);
