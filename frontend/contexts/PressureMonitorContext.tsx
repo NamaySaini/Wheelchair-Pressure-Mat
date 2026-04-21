@@ -59,6 +59,7 @@ type PressureMonitorValue = {
 
   // Timer
   secondsLeft: number;
+  msLeft: number;
   intervalSec: number;
   setIntervalSec: (sec: number) => void;
 
@@ -89,8 +90,9 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
 
   // ── Timer ──
   const [intervalSec, setIntervalSec] = useState(DEFAULT_INTERVAL_SEC);
-  const [secondsLeft, setSecondsLeft] = useState(DEFAULT_INTERVAL_SEC);
+  const [msLeft, setMsLeft] = useState(DEFAULT_INTERVAL_SEC * 1000);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const secondsLeft = Math.ceil(msLeft / 1000);
 
   // ── Shift detection ──
   const [shiftDurationRequired, setShiftDurationRequired] = useState(DEFAULT_SHIFT_DURATION_SEC);
@@ -103,7 +105,7 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
 
   // Reset timer when interval changes
   const resetTimer = useCallback(() => {
-    setSecondsLeft(intervalSec);
+    setMsLeft(intervalSec * 1000);
     setAlertPhase('idle');
     setShiftProgress(0);
     shiftStartRef.current = null;
@@ -111,17 +113,18 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
 
   // When intervalSec changes, restart
   useEffect(() => {
-    setSecondsLeft(intervalSec);
+    setMsLeft(intervalSec * 1000);
   }, [intervalSec]);
 
-  // ── Tick every second ──
+  // ── Tick every 50 ms ──
   useEffect(() => {
+    const TICK_MS = 50;
     timerRef.current = setInterval(() => {
-      setSecondsLeft((prev) => {
-        if (prev <= 1) return 0;
-        return prev - 1;
+      setMsLeft((prev) => {
+        if (prev <= TICK_MS) return 0;
+        return prev - TICK_MS;
       });
-    }, 1000);
+    }, TICK_MS);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
@@ -190,6 +193,7 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
       writeAlertInterval: ble.writeAlertInterval,
 
       secondsLeft,
+      msLeft,
       intervalSec,
       setIntervalSec,
 
@@ -205,7 +209,7 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
     [
       ble.pressureData, ble.isConnected, ble.isScanning, ble.error,
       ble.scan, ble.disconnect, ble.writeAlertInterval,
-      secondsLeft, intervalSec,
+      secondsLeft, msLeft, intervalSec,
       shiftDurationRequired, shiftProgress, isShiftedForward,
       alertPhase, dismissAlert, _completeShift,
     ],

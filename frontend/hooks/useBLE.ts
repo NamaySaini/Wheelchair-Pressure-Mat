@@ -132,6 +132,19 @@ export default function useBLE() {
 
     setIsScanning(true);
 
+    // Wait for the adapter to be PoweredOn before scanning.
+    const currentState = await mgr.state();
+    if (currentState !== 'PoweredOn') {
+      await new Promise<void>((resolve) => {
+        const sub = mgr.onStateChange((s) => {
+          if (s === 'PoweredOn') {
+            sub.remove();
+            resolve();
+          }
+        }, true);
+      });
+    }
+
     mgr.startDeviceScan(null, null, async (err, device) => {
       if (err) {
         setError(err.message);

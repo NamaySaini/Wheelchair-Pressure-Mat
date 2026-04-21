@@ -1,5 +1,8 @@
 #include <Arduino.h>
-#include <NimBLEDevice.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
 // ── Grid dimensions ──
 const int NUM_ROWS = 16;
@@ -10,15 +13,13 @@ const int TOTAL_SENSORS = NUM_ROWS * NUM_COLS;
 const int SAMPLE_INTERVAL_MS = 500; // BLE notify rate
 
 // ── Fake-data pattern timing (milliseconds) ──
-// Phase A: pressure on bottom half (ischial / sitting back)
-// Phase B: pressure on top half (leaning forward)
-uint32_t phaseA_duration_ms = 5000;  // how long to hold bottom-heavy pattern
-uint32_t phaseB_duration_ms = 5000;  // how long to hold top-heavy pattern
+uint32_t phaseA_duration_ms = 10000;
+uint32_t phaseB_duration_ms = 6000;
 
 // ── Alert ──
 const int ALERT_THRESHOLD = 2500;
 
-// ── Hardware pins (unused in fake mode, kept for easy switch-back) ──
+// ── Hardware pins ──
 const int DEMUX_S0 = D0;
 const int DEMUX_S1 = D1;
 const int DEMUX_S2 = D2;
@@ -41,13 +42,13 @@ uint32_t  alertIntervalMs    = 15000;
 uint32_t  lastSampleTime     = 0;
 uint32_t  highPressureStart  = 0;
 bool      highPressureActive = false;
+bool      alertFired         = false;
+bool      deviceConnected    = false;
 
-NimBLEServer*         pServer       = nullptr;
-NimBLECharacteristic* pPressureChar = nullptr;
-NimBLECharacteristic* pConfigChar   = nullptr;
+BLEServer*         pServer       = nullptr;
+BLECharacteristic* pPressureChar = nullptr;
+BLECharacteristic* pConfigChar   = nullptr;
 
-// ── Fake data generator ──
-// Returns true for phase A (bottom-heavy), false for phase B (top-heavy).
 bool isPhaseA() {
   uint32_t cycleDuration = phaseA_duration_ms + phaseB_duration_ms;
   uint32_t pos = millis() % cycleDuration;
@@ -59,13 +60,11 @@ void generateFakeData() {
 
   for (int row = 0; row < NUM_ROWS; row++) {
     for (int col = 0; col < NUM_COLS; col++) {
-      float r = (float)row / (NUM_ROWS - 1);   // 0 = top, 1 = bottom
-      float c = (float)col / (NUM_COLS - 1);    // 0 = left, 1 = right
+      float r = (float)row / (NUM_ROWS - 1);
+      float c = (float)col / (NUM_COLS - 1);
 
       float pressure;
       if (bottomHeavy) {
-        // High pressure on bottom half (rows 8-15), simulating sitting back
-        // Two ischial hotspots at ~(row 12, col 4) and ~(row 12, col 11)
         float dr1 = (row - 12.0f) / 3.0f;
         float dc1 = (col - 4.0f) / 3.0f;
         float dr2 = (row - 12.0f) / 3.0f;
@@ -73,12 +72,9 @@ void generateFakeData() {
         float hotspot1 = expf(-(dr1 * dr1 + dc1 * dc1));
         float hotspot2 = expf(-(dr2 * dr2 + dc2 * dc2));
         float base = fmaxf(hotspot1, hotspot2);
-        // Diffuse lower-half pressure
         float diffuse = (r > 0.4f) ? 0.2f * (r - 0.4f) / 0.6f : 0.0f;
         pressure = fminf(1.0f, base + diffuse);
       } else {
-        // High pressure on top half (rows 0-7), simulating leaning forward
-        // Two thigh hotspots at ~(row 4, col 4) and ~(row 4, col 11)
         float dr1 = (row - 4.0f) / 3.0f;
         float dc1 = (col - 4.0f) / 3.0f;
         float dr2 = (row - 4.0f) / 3.0f;
@@ -86,16 +82,13 @@ void generateFakeData() {
         float hotspot1 = expf(-(dr1 * dr1 + dc1 * dc1));
         float hotspot2 = expf(-(dr2 * dr2 + dc2 * dc2));
         float base = fmaxf(hotspot1, hotspot2);
-        // Diffuse upper-half pressure
         float diffuse = (r < 0.6f) ? 0.2f * (0.6f - r) / 0.6f : 0.0f;
         pressure = fminf(1.0f, base + diffuse);
       }
 
-      // Add a little noise for realism
       float noise = (float)(random(-50, 50)) / 1000.0f;
       pressure = fminf(1.0f, fmaxf(0.0f, pressure + noise));
 
-      // Scale to 12-bit ADC range (0–4095)
       sensorValues[row][col] = (uint16_t)(pressure * 4095.0f);
     }
   }
@@ -115,10 +108,12 @@ bool shouldAlert() {
 
   uint32_t now = millis();
   if (anyHigh) {
+    if (alertFired) return false; // wait until they release before re-arming
     if (!highPressureActive) { highPressureActive = true; highPressureStart = now; }
     return (now - highPressureStart) >= alertIntervalMs;
   } else {
     highPressureActive = false;
+    alertFired = false; // re-armed once pressure is released
     return false;
   }
 }
@@ -129,11 +124,24 @@ void triggerAlert() {
     digitalWrite(LED_PIN, LOW);  delay(300);
   }
   highPressureActive = false;
+  alertFired = true;
 }
 
-// ── BLE config write callback ──
-class ConfigCallback : public NimBLECharacteristicCallbacks {
-  void onWrite(NimBLECharacteristic* pChar, NimBLEConnInfo& connInfo) override {
+// ── BLE callbacks ──
+class ServerCallbacks : public BLEServerCallbacks {
+  void onConnect(BLEServer* server) override {
+    deviceConnected = true;
+    Serial.println("BLE client connected");
+  }
+  void onDisconnect(BLEServer* server) override {
+    deviceConnected = false;
+    Serial.println("BLE client disconnected — restarting advertising");
+    BLEDevice::startAdvertising();
+  }
+};
+
+class ConfigCallback : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* pChar) override {
     std::string val = pChar->getValue();
     if (val.size() == 4) {
       memcpy(&alertIntervalMs, val.data(), 4);
@@ -149,37 +157,36 @@ void setup() {
 
   randomSeed(analogRead(A1));
 
-  Serial.println("--- BLE INIT START ---");
-  delay(1000); // let BLE stack settle
+  Serial.println("Starting BLE work!");
 
-  NimBLEDevice::init("PressureMat");
-  NimBLEDevice::setMTU(517);
-  Serial.println("1. init + MTU OK");
+  BLEDevice::init("PressureMat");
+  pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new ServerCallbacks());
 
-  pServer = NimBLEDevice::createServer();
-  NimBLEService* pService = pServer->createService(SERVICE_UUID);
+  BLEService* pService = pServer->createService(SERVICE_UUID);
+
   pPressureChar = pService->createCharacteristic(
-    PRESSURE_CHAR_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+    PRESSURE_CHAR_UUID,
+    BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
   );
-  pConfigChar = pService->createCharacteristic(CONFIG_CHAR_UUID, NIMBLE_PROPERTY::WRITE);
+  pPressureChar->addDescriptor(new BLE2902());
+
+  pConfigChar = pService->createCharacteristic(
+    CONFIG_CHAR_UUID,
+    BLECharacteristic::PROPERTY_WRITE
+  );
   pConfigChar->setCallbacks(new ConfigCallback());
+
   pService->start();
-  Serial.println("2. service started");
 
-  pServer->start();
-  Serial.println("3. server started");
-
-  // Simplest possible advertising — just use high-level API
-  NimBLEAdvertising* pAdvertising = NimBLEDevice::getAdvertising();
+  BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->setName("PressureMat");
-  pAdvertising->enableScanResponse(true);
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06); // iPhone connection hints
+  pAdvertising->setMinPreferred(0x12);
+  BLEDevice::startAdvertising();
 
-  bool advOk = pAdvertising->start();
-  Serial.printf("4. advertising started: %s\n", advOk ? "YES" : "NO");
-
-  // Print the actual advertising payload size for debug
-  Serial.printf("--- BLE INIT DONE (adv=%s) ---\n", advOk ? "OK" : "FAIL");
+  Serial.println("Characteristic defined! Now you can read it in your phone!");
   Serial.printf("Phase A (bottom-heavy): %u ms\n", phaseA_duration_ms);
   Serial.printf("Phase B (top-heavy):    %u ms\n", phaseB_duration_ms);
 }
@@ -189,20 +196,14 @@ void loop() {
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS) {
     lastSampleTime = now;
 
-    // Generate fake alternating pressure pattern instead of reading real sensors
     generateFakeData();
 
-    // Print BLE status every cycle so we can debug
-    Serial.printf("--- BLE: server=%s, advertising=%s, connected=%d ---\n",
-      pServer ? "OK" : "NULL",
-      NimBLEDevice::getAdvertising()->isAdvertising() ? "YES" : "NO",
-      pServer->getConnectedCount());
-
-    Serial.printf("[%s] Sensors (sample [0][0]=%d [12][4]=%d):\n",
+    Serial.printf("[%s] connected=%d sample [0][0]=%d [12][4]=%d\n",
       isPhaseA() ? "BOTTOM" : "TOP",
+      deviceConnected ? 1 : 0,
       sensorValues[0][0], sensorValues[12][4]);
 
-    if (pServer->getConnectedCount() > 0) {
+    if (deviceConnected) {
       pPressureChar->setValue(reinterpret_cast<uint8_t*>(sensorValues), sizeof(sensorValues));
       pPressureChar->notify();
     }

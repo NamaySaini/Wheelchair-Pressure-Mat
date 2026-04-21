@@ -4,20 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IoT system for wheelchair pressure injury prevention. A Velostat pressure mat with a 4x4 electrode grid feeds through a CD74HC4067 16-channel multiplexer into a Seeed XIAO ESP32-C3. The firmware reads all 16 sensors every 500ms, exposes data via BLE NOTIFY, and triggers an LED alert after sustained high pressure.
+IoT system for wheelchair pressure injury prevention. A Velostat pressure mat with a 4x4 electrode grid feeds through a CD74HC4067 16-channel multiplexer into an Arduino Nano ESP32. The firmware reads all 16 sensors every 500ms, exposes data via BLE NOTIFY, and triggers an LED alert after sustained high pressure.
 
 Planned but not yet implemented: React Native mobile app (`app/`) and Node.js + Express backend (`backend/`) with Supabase.
 
 ## Firmware
 
-**Toolchain:** PlatformIO with Arduino framework targeting `seeed_xiao_esp32c3`.
+**Toolchain:** PlatformIO with Arduino framework targeting `arduino_nano_esp32`.
 
 ```bash
 # Build
-pio run -e seeed_xiao_esp32c3
+pio run -e arduino_nano_esp32
 
 # Build + upload
-pio run -e seeed_xiao_esp32c3 --target upload
+pio run -e arduino_nano_esp32 --target upload
 
 # Serial monitor (115200 baud)
 pio device monitor

@@ -15,6 +15,17 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 import { usePressureMonitor } from '@/contexts/PressureMonitorContext';
 
+function formatTimer(msLeft: number): string {
+  if (msLeft <= 0) return '0.00';
+  if (msLeft >= 60_000) {
+    const totalSec = Math.ceil(msLeft / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+  return (msLeft / 1000).toFixed(2);
+}
+
 const TAB_ICONS: Record<string, (focused: boolean) => React.ReactNode> = {
   index: (f) => (
     <Ionicons name={f ? 'home' : 'home-outline'} size={22} color={f ? Colors.white : 'rgba(255,255,255,0.55)'} />
@@ -40,11 +51,11 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
   const left = routes.slice(0, 2);
   const right = routes.slice(2, 4);
 
-  const { secondsLeft, alertPhase } = usePressureMonitor();
+  const { msLeft, alertPhase } = usePressureMonitor();
   const hasNavigated = useRef(false);
 
-  const minutesLeft = Math.ceil(secondsLeft / 60);
-  const timerExpired = secondsLeft <= 0;
+  const timerExpired = msLeft <= 0;
+  const timerLabel = formatTimer(msLeft);
 
   // Auto-navigate to timer-alert when alert fires
   useEffect(() => {
@@ -72,7 +83,9 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
         activeOpacity={0.85}
         onPress={() => navigation.navigate('timer-alert')}
       >
-        <Text style={styles.timerValue}>{minutesLeft}</Text>
+        <Text style={[styles.timerValue, msLeft < 60_000 && styles.timerValueSmall]}>
+          {timerLabel}
+        </Text>
       </TouchableOpacity>
 
       {/* Pill */}
@@ -169,9 +182,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.trackerRed,
   },
   timerValue: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '600',
     color: Colors.white,
-    lineHeight: 32,
+    lineHeight: 26,
+  },
+  timerValueSmall: {
+    fontSize: 18,
+    lineHeight: 22,
   },
 });
