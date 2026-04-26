@@ -2,7 +2,7 @@
  * Chat — Virtual Caregiver conversation UI.
  * Accessible as a stack screen from caregiver tab.
  */
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,14 @@ import {
   Platform,
   StyleSheet,
   SafeAreaView,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/theme';
+import { backendClient } from '@/lib/backend';
+import { usePressureMonitor } from '@/contexts/PressureMonitorContext';
 
 type Message = {
   id: string;
@@ -25,42 +28,101 @@ type Message = {
   from: 'assistant' | 'user';
 };
 
-const INITIAL_MESSAGES: Message[] = [
-  { id: '1', text: 'Hi! How can I help you today?', from: 'assistant' },
-];
+const INITIAL_MESSAGE: Message = {
+  id: 'initial',
+  text: 'Hi! How can I help you today?',
+  from: 'assistant',
+};
 
 const QUICK_REPLIES = [
-  'What does this alert mean?',
-  'How do I relieve pressure now?',
-  'How long should I hold it?',
-  'Did I shift my weight enough?',
+  'Am I sitting symmetrically?',
+  'Which side has more pressure?',
+  'Is my compliance getting better?',
+  'Was today a high risk day?',
 ];
 
 export default function ChatScreen() {
   const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const scrollRef = useRef<ScrollView>(null);
 
-  function send(text: string) {
+  const { lastSessionSummary } = usePressureMonitor();
+  const lastPushedSummaryIdRef = useRef<string | null>(null);
+
+  // Load prior chat history on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const history = await backendClient.getChatHistory();
+        if (history.length > 0) {
+          setMessages(
+            history.map((h, i) => ({
+              id: h.id ?? `${i}`,
+              text: h.content,
+              from: h.role === 'user' ? 'user' : 'assistant',
+            }))
+          );
+        }
+      } catch (e: any) {
+        console.warn('chat history load failed:', e.message);
+      } finally {
+        setIsLoadingHistory(false);
+        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 100);
+      }
+    })();
+  }, []);
+
+  // When a new session summary arrives, inject it as an assistant message.
+  useEffect(() => {
+    if (!lastSessionSummary) return;
+    if (lastPushedSummaryIdRef.current === lastSessionSummary.session_id) return;
+    lastPushedSummaryIdRef.current = lastSessionSummary.session_id;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `summary-${lastSessionSummary.session_id}`,
+        text: lastSessionSummary.summary_text,
+        from: 'assistant',
+      },
+    ]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+  }, [lastSessionSummary]);
+
+  async function send(text: string) {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed || isSending) return;
 
     const userMsg: Message = {
-      id: Date.now().toString(),
+      id: `u-${Date.now()}`,
       text: trimmed,
       from: 'user',
     };
-    // Placeholder assistant reply
-    const assistantMsg: Message = {
-      id: (Date.now() + 1).toString(),
-      text: "I'm analysing your pressure data — response coming soon.",
-      from: 'assistant',
-    };
-    setMessages((prev) => [...prev, userMsg, assistantMsg]);
+    setMessages((prev) => [...prev, userMsg]);
     setInput('');
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    setIsSending(true);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+
+    try {
+      const { reply } = await backendClient.sendChat(trimmed);
+      setMessages((prev) => [
+        ...prev,
+        { id: `a-${Date.now()}`, text: reply || '(empty reply)', from: 'assistant' },
+      ]);
+    } catch (e: any) {
+      setMessages((prev) => [
+        ...prev,
+        { id: `err-${Date.now()}`, text: `Error: ${e.message}`, from: 'assistant' },
+      ]);
+    } finally {
+      setIsSending(false);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    }
   }
+
+  const showQuickReplies = !isLoadingHistory && messages.length === 1 && !isSending;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -72,7 +134,6 @@ export default function ChatScreen() {
           <Ionicons name="close" size={22} color={Colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Virtual Caregiver</Text>
-        {/* Spacer */}
         <View style={styles.backBtn} />
       </View>
 
@@ -88,27 +149,36 @@ export default function ChatScreen() {
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
         >
-          {messages.map((msg) => (
-            <View
-              key={msg.id}
-              style={[
-                styles.bubble,
-                msg.from === 'user' ? styles.userBubble : styles.assistantBubble,
-              ]}
-            >
-              <Text
+          {isLoadingHistory ? (
+            <ActivityIndicator color={Colors.white} style={{ marginTop: 40 }} />
+          ) : (
+            messages.map((msg) => (
+              <View
+                key={msg.id}
                 style={[
-                  styles.bubbleText,
-                  msg.from === 'user' ? styles.userText : styles.assistantText,
+                  styles.bubble,
+                  msg.from === 'user' ? styles.userBubble : styles.assistantBubble,
                 ]}
               >
-                {msg.text}
-              </Text>
-            </View>
-          ))}
+                <Text
+                  style={[
+                    styles.bubbleText,
+                    msg.from === 'user' ? styles.userText : styles.assistantText,
+                  ]}
+                >
+                  {msg.text}
+                </Text>
+              </View>
+            ))
+          )}
 
-          {/* Quick replies (shown when only the initial message is visible) */}
-          {messages.length === 1 && (
+          {isSending && (
+            <View style={[styles.bubble, styles.assistantBubble]}>
+              <ActivityIndicator color={Colors.white} size="small" />
+            </View>
+          )}
+
+          {showQuickReplies && (
             <View style={styles.quickReplies}>
               {QUICK_REPLIES.map((q) => (
                 <TouchableOpacity
@@ -134,10 +204,19 @@ export default function ChatScreen() {
             placeholderTextColor={Colors.chatBubbleDark}
             returnKeyType="send"
             onSubmitEditing={() => send(input)}
+            editable={!isSending}
             multiline={false}
           />
-          <TouchableOpacity onPress={() => send(input)} style={styles.micBtn}>
-            <Ionicons name="mic" size={20} color={Colors.chatBubbleDark} />
+          <TouchableOpacity
+            onPress={() => send(input)}
+            style={styles.micBtn}
+            disabled={isSending || !input.trim()}
+          >
+            <Ionicons
+              name="send"
+              size={20}
+              color={input.trim() ? Colors.primary : Colors.chatBubbleDark}
+            />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

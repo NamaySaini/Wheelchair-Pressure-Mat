@@ -10,6 +10,16 @@ import PressureMap from '@/components/pressure-map';
 import { Colors, PressureColors } from '@/constants/theme';
 import { usePressureMonitor } from '@/contexts/PressureMonitorContext';
 
+function formatElapsed(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const mm = m.toString().padStart(2, '0');
+  const ss = s.toString().padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 export default function HomeScreen() {
   const {
     pressureData,
@@ -21,9 +31,21 @@ export default function HomeScreen() {
     alertPhase,
     shiftProgress,
     isShiftedForward,
+    activeSessionId,
+    sessionStartedAt,
+    isSessionStarting,
+    isSessionEnding,
+    startSession,
+    endSession,
+    msLeft,
   } = usePressureMonitor();
 
   const showShiftBanner = alertPhase === 'dismissed';
+
+  // msLeft is referenced so this component re-renders while the timer ticks,
+  // keeping the elapsed-time readout live.
+  void msLeft;
+  const elapsedMs = sessionStartedAt ? Date.now() - sessionStartedAt : 0;
 
   return (
     <>
@@ -79,6 +101,40 @@ export default function HomeScreen() {
             </TouchableOpacity>
           )}
           {bleError && <Text style={styles.errorText}>{bleError}</Text>}
+
+          {/* Session controls */}
+          {!activeSessionId ? (
+            <TouchableOpacity
+              style={[
+                styles.sessionBtn,
+                (!isConnected || isSessionStarting) && styles.sessionBtnDisabled,
+              ]}
+              onPress={startSession}
+              disabled={!isConnected || isSessionStarting}
+              activeOpacity={0.8}
+            >
+              {isSessionStarting ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <Text style={styles.sessionBtnText}>Start Session</Text>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.sessionBtn, styles.sessionBtnEnd]}
+              onPress={() => endSession('user')}
+              disabled={isSessionEnding}
+              activeOpacity={0.8}
+            >
+              {isSessionEnding ? (
+                <ActivityIndicator color={Colors.white} size="small" />
+              ) : (
+                <Text style={styles.sessionBtnText}>
+                  End Session · {formatElapsed(elapsedMs)}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
 
           {/* Guidance banner (only when no shift reminder active) */}
           {!showShiftBanner && (
@@ -190,6 +246,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 6,
     textAlign: 'center',
+  },
+  // ── Session button ──
+  sessionBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 28,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    marginBottom: 10,
+    minWidth: 240,
+    alignItems: 'center',
+  },
+  sessionBtnEnd: {
+    backgroundColor: Colors.trackerRed,
+  },
+  sessionBtnDisabled: {
+    opacity: 0.4,
+  },
+  sessionBtnText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   // ── Guidance ──
   guidanceBanner: {

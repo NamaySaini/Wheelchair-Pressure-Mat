@@ -11,6 +11,14 @@ const int TOTAL_SENSORS = NUM_ROWS * NUM_COLS;
 
 // ── Timing ──
 const int SAMPLE_INTERVAL_MS = 500; // BLE notify rate
+const int PRINT_INTERVAL_MS  = 300; // serial-monitor dump rate
+
+// Set to 1 to generate synthetic patterns (no mat needed). Set to 0 to scan the real matrix.
+#define USE_FAKE_DATA 0
+
+// Settling time between channel selects on the CD74HC4067 pair. A few µs is plenty,
+// but Velostat + long wiring sometimes benefits from a touch more.
+const int MUX_SETTLE_US = 5;
 
 // ── Fake-data pattern timing (milliseconds) ──
 uint32_t phaseA_duration_ms = 10000;
@@ -20,16 +28,17 @@ uint32_t phaseB_duration_ms = 6000;
 const int ALERT_THRESHOLD = 2500;
 
 // ── Hardware pins ──
-const int DEMUX_S0 = D0;
-const int DEMUX_S1 = D1;
-const int DEMUX_S2 = D2;
-const int DEMUX_S3 = D3;
-const int MUX_S0   = D4;
-const int MUX_S1   = D5;
-const int MUX_S2   = D6;
-const int MUX_S3   = D7;
+const int DEMUX_S0 = D6;
+const int DEMUX_S1 = D7;
+const int DEMUX_S2 = D8;
+const int DEMUX_S3 = D9;
+const int MUX_S0   = D2;
+const int MUX_S1   = D3;
+const int MUX_S2   = D4;
+const int MUX_S3   = D5;
 const int MUX_SIG  = A6;
 const int LED_PIN  = D10;
+const int REPOSITION_LED_PIN = D12;
 
 // ── BLE UUIDs ──
 #define SERVICE_UUID        "12345678-1234-1234-1234-123456789abc"
@@ -40,6 +49,7 @@ const int LED_PIN  = D10;
 uint16_t  sensorValues[NUM_ROWS][NUM_COLS];
 uint32_t  alertIntervalMs    = 15000;
 uint32_t  lastSampleTime     = 0;
+uint32_t  lastPrintTime      = 0;
 uint32_t  highPressureStart  = 0;
 bool      highPressureActive = false;
 bool      alertFired         = false;
@@ -48,6 +58,53 @@ bool      deviceConnected    = false;
 BLEServer*         pServer       = nullptr;
 BLECharacteristic* pPressureChar = nullptr;
 BLECharacteristic* pConfigChar   = nullptr;
+
+// ── Matrix scan ──
+// The "demux" CD74HC4067 has its SIG pin tied to 3.3V in hardware, so selecting
+// a channel drives that row HIGH. The "mux" CD74HC4067 routes one column back
+// to MUX_SIG (A6) for the ADC to sample. One row at a time; unselected rows sit
+// at high impedance (the CD74HC4067 has 16 analog through-paths and no active
+// ground). That's fine for a first pass — if ghosting shows up, revisit with
+// column-side pull-downs or an Arduino-driven row line.
+
+inline void selectChannel(int s0, int s1, int s2, int s3, uint8_t channel) {
+  digitalWrite(s0, (channel >> 0) & 0x01);
+  digitalWrite(s1, (channel >> 1) & 0x01);
+  digitalWrite(s2, (channel >> 2) & 0x01);
+  digitalWrite(s3, (channel >> 3) & 0x01);
+}
+
+void printMatrix() {
+  Serial.printf("── matrix (connected=%d) ──\n", deviceConnected ? 1 : 0);
+  Serial.print("       ");
+  for (int col = 0; col < NUM_COLS; col++) {
+    Serial.printf("C%02d  ", col);
+  }
+  Serial.println();
+  for (int row = 0; row < NUM_ROWS; row++) {
+    Serial.printf("R%02d | ", row);
+    for (int col = 0; col < NUM_COLS; col++) {
+      Serial.printf("%4u ", sensorValues[row][col]);
+    }
+    Serial.println();
+  }
+  Serial.println("Rows (Rxx) = DEMUX-selected drive lines");
+  Serial.println("Cols (Cxx) = MUX-selected read lines");
+  Serial.println();
+}
+
+void scanMatrix() {
+  for (int row = 0; row < NUM_ROWS; row++) {
+    selectChannel(DEMUX_S0, DEMUX_S1, DEMUX_S2, DEMUX_S3, row);
+    delayMicroseconds(MUX_SETTLE_US);
+
+    for (int col = 0; col < NUM_COLS; col++) {
+      selectChannel(MUX_S0, MUX_S1, MUX_S2, MUX_S3, col);
+      delayMicroseconds(MUX_SETTLE_US);
+      sensorValues[row][col] = (uint16_t)analogRead(MUX_SIG);
+    }
+  }
+}
 
 bool isPhaseA() {
   uint32_t cycleDuration = phaseA_duration_ms + phaseB_duration_ms;
@@ -120,8 +177,10 @@ bool shouldAlert() {
 
 void triggerAlert() {
   for (int i = 0; i < 3; i++) {
-    digitalWrite(LED_PIN, HIGH); delay(300);
-    digitalWrite(LED_PIN, LOW);  delay(300);
+    digitalWrite(LED_PIN, HIGH);
+    delay(300);
+    digitalWrite(LED_PIN, LOW);
+    delay(300);
   }
   highPressureActive = false;
   alertFired = true;
@@ -154,6 +213,21 @@ void setup() {
   Serial.begin(115200);
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
+  pinMode(REPOSITION_LED_PIN, OUTPUT);
+  digitalWrite(REPOSITION_LED_PIN, LOW);
+
+  // Select-line outputs for both CD74HC4067s.
+  pinMode(DEMUX_S0, OUTPUT);
+  pinMode(DEMUX_S1, OUTPUT);
+  pinMode(DEMUX_S2, OUTPUT);
+  pinMode(DEMUX_S3, OUTPUT);
+  pinMode(MUX_S0, OUTPUT);
+  pinMode(MUX_S1, OUTPUT);
+  pinMode(MUX_S2, OUTPUT);
+  pinMode(MUX_S3, OUTPUT);
+
+  // ESP32 ADC is 12-bit by default on Arduino-ESP32 ≥ 2.x, but be explicit.
+  analogReadResolution(12);
 
   randomSeed(analogRead(A1));
 
@@ -196,12 +270,11 @@ void loop() {
   if (now - lastSampleTime >= SAMPLE_INTERVAL_MS) {
     lastSampleTime = now;
 
+#if USE_FAKE_DATA
     generateFakeData();
-
-    Serial.printf("[%s] connected=%d sample [0][0]=%d [12][4]=%d\n",
-      isPhaseA() ? "BOTTOM" : "TOP",
-      deviceConnected ? 1 : 0,
-      sensorValues[0][0], sensorValues[12][4]);
+#else
+    scanMatrix();
+#endif
 
     if (deviceConnected) {
       pPressureChar->setValue(reinterpret_cast<uint8_t*>(sensorValues), sizeof(sensorValues));
@@ -209,5 +282,10 @@ void loop() {
     }
 
     if (shouldAlert()) triggerAlert();
+  }
+
+  if (now - lastPrintTime >= PRINT_INTERVAL_MS) {
+    lastPrintTime = now;
+    printMatrix();
   }
 }
