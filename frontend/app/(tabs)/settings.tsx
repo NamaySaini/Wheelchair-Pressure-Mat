@@ -20,7 +20,7 @@ export default function SettingsScreen() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <ScreenShell
         title="Settings"
         subtitle="Manage your profile and preferences"
@@ -36,8 +36,8 @@ export default function SettingsScreen() {
             <View style={styles.avatar} />
 
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>Jane Doe</Text>
-              <Text style={styles.profileEmail}>jane.doe@example.com</Text>
+              <Text style={styles.profileName}>Maya</Text>
+              <Text style={styles.profileEmail}>maya@example.com</Text>
             </View>
 
             {/* Edit button */}
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   profileCard: {
-    backgroundColor: Colors.creamCard,
+    backgroundColor: 'rgba(255,158,87,0.46)',
     borderRadius: 8,
     padding: 14,
     flexDirection: 'row',
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   prefsCard: {
-    backgroundColor: Colors.creamCard,
+    backgroundColor: 'rgba(255,158,87,0.46)',
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,

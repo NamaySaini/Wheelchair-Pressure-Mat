@@ -131,7 +131,7 @@ export default function ChatScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="close" size={22} color={Colors.white} />
+          <Ionicons name="close" size={22} color="#351601" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Virtual Caregiver</Text>
         <View style={styles.backBtn} />
@@ -201,21 +201,21 @@ export default function ChatScreen() {
             value={input}
             onChangeText={setInput}
             placeholder="Type or ask me something..."
-            placeholderTextColor={Colors.chatBubbleDark}
+            placeholderTextColor="rgba(53,22,1,0.45)"
             returnKeyType="send"
             onSubmitEditing={() => send(input)}
             editable={!isSending}
             multiline={false}
           />
           <TouchableOpacity
-            onPress={() => send(input)}
+            onPress={() => (input.trim() ? send(input) : undefined)}
             style={styles.micBtn}
-            disabled={isSending || !input.trim()}
+            disabled={isSending}
           >
             <Ionicons
-              name="send"
+              name={input.trim() ? 'send' : 'mic'}
               size={20}
-              color={input.trim() ? Colors.primary : Colors.chatBubbleDark}
+              color="#351601"
             />
           </TouchableOpacity>
         </View>
@@ -249,8 +249,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 21,
-    fontWeight: '400',
-    color: Colors.textCream,
+    fontWeight: '600',
+    color: '#351601',
     textAlign: 'center',
   },
   messages: {
@@ -269,11 +269,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   assistantBubble: {
-    backgroundColor: Colors.chatBubbleDark,
+    backgroundColor: '#013d7c',
     alignSelf: 'flex-start',
   },
   userBubble: {
-    backgroundColor: Colors.chatBubbleLight,
+    backgroundColor: '#fff2e3',
     alignSelf: 'flex-end',
   },
   bubbleText: {
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   userText: {
-    color: Colors.white,
+    color: '#351601',
   },
   quickReplies: {
     alignSelf: 'flex-end',
@@ -292,19 +292,19 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   qrBubble: {
-    backgroundColor: Colors.chatBubbleLight,
+    backgroundColor: '#fff2e3',
     borderRadius: 16,
     paddingVertical: 9,
     paddingHorizontal: 14,
   },
   qrText: {
     fontSize: 14,
-    color: Colors.white,
+    color: '#351601',
   },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.textCream,
+    backgroundColor: '#fff2e3',
     borderRadius: 50,
     marginHorizontal: 17,
     marginBottom: Platform.OS === 'ios' ? 12 : 20,
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 14,
-    color: Colors.chatBubbleDark,
+    color: '#351601',
   },
   micBtn: {
     padding: 2,

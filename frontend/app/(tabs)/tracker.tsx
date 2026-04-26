@@ -174,12 +174,10 @@ export default function TrackerScreen() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <ScreenShell
         title="Pressure Tracker"
         subtitle="Track Pressure Over Time"
-        headerColor={Colors.trackerRed}
-        bgColor={Colors.trackerBg}
         scrollable={false}
       >
         <View style={styles.inner}>
@@ -293,7 +291,7 @@ const styles = StyleSheet.create({
   },
   periodBar: {
     flexDirection: 'row',
-    backgroundColor: '#0D1A63',
+    backgroundColor: '#013d7c',
     borderRadius: 90,
     padding: 4,
     width: '100%',
@@ -306,7 +304,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   periodBtnActive: {
-    backgroundColor: '#000',
+    backgroundColor: '#051743',
   },
   periodText: {
     fontSize: 15,
@@ -364,7 +362,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   sliderCard: {
-    backgroundColor: Colors.trackerCardBg,
+    backgroundColor: 'rgba(255,158,87,0.46)',
     borderRadius: 12,
     marginTop: 10,
     width: '100%',
@@ -389,7 +387,7 @@ const styles = StyleSheet.create({
   },
   arrow: {
     fontSize: 24,
-    color: Colors.trackerRed,
+    color: Colors.textDark,
     fontWeight: '700',
   },
   arrowTextDisabled: {
@@ -425,7 +423,7 @@ const styles = StyleSheet.create({
   },
   sliderFill: {
     height: '100%',
-    backgroundColor: Colors.trackerRed,
+    backgroundColor: Colors.primary,
     borderRadius: 2,
   },
   sliderThumb: {
@@ -433,7 +431,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: Colors.trackerRed,
+    backgroundColor: Colors.primary,
     marginLeft: -9,
     top: 3,
     shadowColor: '#000',

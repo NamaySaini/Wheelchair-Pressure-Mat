@@ -51,7 +51,7 @@ export default function HomeScreen() {
     <>
       <StatusBar style="light" />
       <ScreenShell
-        title="Hello Jane!"
+        title="Hello Maya!"
         subtitle="Your Pressure Map, Live"
         showAvatar
         scrollable={false}
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   },
   // ── Guidance ──
   guidanceBanner: {
-    backgroundColor: 'rgba(9,146,231,0.22)',
+    backgroundColor: '#013d7c',
     borderRadius: 9,
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   },
   guidanceText: {
     fontSize: 15,
-    color: Colors.textDark,
+    color: '#fff2e4',
     textAlign: 'center',
   },
   // ── Pressure bar & map ──
