@@ -1,13 +1,14 @@
 /**
  * Pressure Tracker — view historical pressure over Day / Week / Month / Year.
  */
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   LayoutChangeEvent,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
@@ -19,6 +20,7 @@ import {
 import ScreenShell from '@/components/screen-shell';
 import PressureMap from '@/components/pressure-map';
 import { Colors, PressureColors } from '@/constants/theme';
+import { backendClient, type TrackerBucket, type TrackerPeriod } from '@/lib/backend';
 
 type Period = 'Year' | 'Month' | 'Week' | 'Day';
 const PERIODS: Period[] = ['Year', 'Month', 'Week', 'Day'];
@@ -81,15 +83,58 @@ function isFuturePeriod(anchor: Date, today: Date, period: Period): boolean {
   return anchor.getFullYear() > today.getFullYear();
 }
 
+function periodToApi(period: Period): TrackerPeriod {
+  return period.toLowerCase() as TrackerPeriod;
+}
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
 export default function TrackerScreen() {
   const today = useMemo(() => new Date(), []);
   const [period, setPeriod] = useState<Period>('Day');
   const [anchor, setAnchor] = useState(new Date());
   const [sliderFraction, setSliderFraction] = useState(0.5);
   const [trackWidth, setTrackWidth] = useState(0);
+  const [buckets, setBuckets] = useState<TrackerBucket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const isAtCurrent = isSamePeriod(anchor, today, period);
   const canGoForward = !isAtCurrent;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    backendClient
+      .getTracker(periodToApi(period), anchor.toISOString())
+      .then((response) => {
+        if (cancelled) return;
+        setBuckets(response.buckets);
+
+        if (response.buckets.length > 1) {
+          const nextFraction = response.selected_index / (response.buckets.length - 1);
+          setSliderFraction(Math.max(0, Math.min(1, nextFraction)));
+        } else {
+          setSliderFraction(0);
+        }
+      })
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setBuckets([]);
+        setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [period, anchor]);
 
   const navigate = useCallback(
     (delta: number) => {
@@ -162,6 +207,25 @@ export default function TrackerScreen() {
     return MONTH_ABBRS[idx];
   }, [period, sliderFraction, anchor]);
 
+  const selectedBucket = useMemo(() => {
+    if (!buckets.length) return null;
+    const idx = Math.round(sliderFraction * (buckets.length - 1));
+    return buckets[Math.max(0, Math.min(buckets.length - 1, idx))] ?? null;
+  }, [buckets, sliderFraction]);
+
+  const mapData = useMemo(
+    () => (selectedBucket?.grid ? selectedBucket.grid.map((value) => clamp01(value)) : Array.from({ length: 256 }, () => 0)),
+    [selectedBucket]
+  );
+
+  const summaryLabel = useMemo(() => {
+    if (loading) return 'Loading tracker data...';
+    if (error) return 'Could not load tracker data.';
+    if (!selectedBucket || !selectedBucket.snapshot_count) return 'No seeded snapshots in this bucket.';
+    if (selectedBucket.snapshot_count === 1) return `Average from 1 snapshot in ${selectedBucket.label}.`;
+    return `Average from ${selectedBucket.snapshot_count} snapshots in ${selectedBucket.label}.`;
+  }, [loading, error, selectedBucket]);
+
   const onTrackLayout = (e: LayoutChangeEvent) => {
     setTrackWidth(e.nativeEvent.layout.width);
   };
@@ -174,12 +238,10 @@ export default function TrackerScreen() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <ScreenShell
         title="Pressure Tracker"
         subtitle="Track Pressure Over Time"
-        headerColor={Colors.trackerRed}
-        bgColor={Colors.trackerBg}
         scrollable={false}
       >
         <View style={styles.inner}>
@@ -219,10 +281,15 @@ export default function TrackerScreen() {
           <Text style={styles.mapSide}>FRONT</Text>
           <View style={styles.mapRow}>
             <Text style={styles.mapLR}>L</Text>
-            <PressureMap size={210} />
+            <PressureMap size={210} data={mapData} />
             <Text style={styles.mapLR}>R</Text>
           </View>
           <Text style={styles.mapSide}>BACK</Text>
+          <View style={styles.summaryRow}>
+            {loading ? <ActivityIndicator size="small" color={Colors.trackerRed} /> : null}
+            <Text style={styles.summaryText}>{summaryLabel}</Text>
+          </View>
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           {/* Time navigation card */}
           <View style={styles.sliderCard}>
@@ -293,7 +360,7 @@ const styles = StyleSheet.create({
   },
   periodBar: {
     flexDirection: 'row',
-    backgroundColor: '#0D1A63',
+    backgroundColor: '#013d7c',
     borderRadius: 90,
     padding: 4,
     width: '100%',
@@ -306,7 +373,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   periodBtnActive: {
-    backgroundColor: '#000',
+    backgroundColor: '#051743',
   },
   periodText: {
     fontSize: 15,
@@ -363,8 +430,28 @@ const styles = StyleSheet.create({
     width: 20,
     textAlign: 'center',
   },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 2,
+    minHeight: 22,
+  },
+  summaryText: {
+    fontSize: 12,
+    color: Colors.textDark,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  errorText: {
+    fontSize: 11,
+    color: '#7A1E1E',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
   sliderCard: {
-    backgroundColor: Colors.trackerCardBg,
+    backgroundColor: 'rgba(255,158,87,0.46)',
     borderRadius: 12,
     marginTop: 10,
     width: '100%',
@@ -389,7 +476,7 @@ const styles = StyleSheet.create({
   },
   arrow: {
     fontSize: 24,
-    color: Colors.trackerRed,
+    color: Colors.textDark,
     fontWeight: '700',
   },
   arrowTextDisabled: {
@@ -425,7 +512,7 @@ const styles = StyleSheet.create({
   },
   sliderFill: {
     height: '100%',
-    backgroundColor: Colors.trackerRed,
+    backgroundColor: Colors.primary,
     borderRadius: 2,
   },
   sliderThumb: {
@@ -433,7 +520,7 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: Colors.trackerRed,
+    backgroundColor: Colors.primary,
     marginLeft: -9,
     top: 3,
     shadowColor: '#000',

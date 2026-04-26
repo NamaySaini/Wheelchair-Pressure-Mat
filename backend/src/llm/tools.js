@@ -96,6 +96,7 @@ const TOOL_DEFS = [
 ];
 
 async function get_session_history(userId, { start_date, end_date }) {
+  const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from('sessions')
     .select(
@@ -104,6 +105,7 @@ async function get_session_history(userId, { start_date, end_date }) {
     .eq('user_id', userId)
     .gte('started_at', start_date)
     .lte('started_at', end_date + 'T23:59:59.999Z')
+    .lte('started_at', nowIso)
     .order('started_at', { ascending: false });
   if (error) throw new Error(error.message);
   return { sessions: data || [] };
@@ -113,13 +115,15 @@ async function get_pressure_averages(userId, { zone, time_period }) {
   const days = { day: 1, week: 7, month: 30 }[time_period];
   const since = new Date();
   since.setDate(since.getDate() - days);
+  const nowIso = new Date().toISOString();
 
   const { data: sessions } = await supabase
     .from('sessions')
     .select('id, avg_distribution')
     .eq('user_id', userId)
     .not('ended_at', 'is', null)
-    .gte('started_at', since.toISOString());
+    .gte('started_at', since.toISOString())
+    .lte('started_at', nowIso);
 
   const relevantZones = zone === 'all' ? ZONES : [zone];
   const totals = Object.fromEntries(relevantZones.map((z) => [z, 0]));
@@ -140,12 +144,14 @@ async function get_alert_history(userId, { days }) {
   const capped = Math.min(days, 90);
   const since = new Date();
   since.setDate(since.getDate() - capped);
+  const nowIso = new Date().toISOString();
 
   const { data: sessions } = await supabase
     .from('sessions')
     .select('id')
     .eq('user_id', userId)
-    .gte('started_at', since.toISOString());
+    .gte('started_at', since.toISOString())
+    .lte('started_at', nowIso);
   const ids = (sessions || []).map((s) => s.id);
   if (!ids.length) return { days: capped, events: [] };
 
@@ -172,12 +178,14 @@ async function get_time_of_day_patterns(userId, { days = 30 }) {
   const capped = Math.min(days, 90);
   const since = new Date();
   since.setDate(since.getDate() - capped);
+  const nowIso = new Date().toISOString();
 
   const { data: sessions } = await supabase
     .from('sessions')
     .select('id')
     .eq('user_id', userId)
-    .gte('started_at', since.toISOString());
+    .gte('started_at', since.toISOString())
+    .lte('started_at', nowIso);
   const ids = (sessions || []).map((s) => s.id);
 
   const buckets = Array.from({ length: 24 }, (_, h) => ({

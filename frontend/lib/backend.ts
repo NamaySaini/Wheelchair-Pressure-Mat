@@ -9,6 +9,7 @@ type RequestOptions = {
 type AccessTokenProvider = () => Promise<string | null> | string | null;
 
 export type PressurePeriod = 'week' | 'month' | 'year';
+export type TrackerPeriod = 'day' | 'week' | 'month' | 'year';
 
 export type ZoneLabel = 'low' | 'moderate' | 'high';
 
@@ -61,6 +62,21 @@ export type SessionSummary = {
   summary_text: string;
   key_insight: string | null;
   generated_at: string;
+};
+
+export type TrackerBucket = {
+  index: number;
+  label: string;
+  snapshot_count: number;
+  grid: number[] | null;
+};
+
+export type TrackerResponse = {
+  period: TrackerPeriod;
+  anchor: string;
+  timezone: string;
+  selected_index: number;
+  buckets: TrackerBucket[];
 };
 
 export type SessionEndResponse = {
@@ -337,6 +353,20 @@ export class BackendClient {
   async listSessions(period: PressurePeriod = 'week') {
     if (DEMO_MODE) return demoDelay<SessionRow[]>([]);
     return this.request<SessionRow[]>(`/sessions?period=${period}`);
+  }
+
+  async getTracker(period: TrackerPeriod, anchor: string) {
+    if (DEMO_MODE) {
+      return demoDelay<TrackerResponse>({
+        period,
+        anchor,
+        timezone: 'America/Chicago',
+        selected_index: 0,
+        buckets: [],
+      });
+    }
+    const params = new URLSearchParams({ period, anchor });
+    return this.request<TrackerResponse>(`/tracker?${params.toString()}`);
   }
 
   async getSession(sessionId: string) {

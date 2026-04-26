@@ -20,10 +20,11 @@ import {
   StyleSheet,
   ViewStyle,
   StatusBar,
-  Platform,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
+import { PROFILE_PHOTO } from '@/constants/profile';
 
 type Props = {
   title: string;
@@ -62,7 +63,7 @@ export default function ScreenShell({
       <StatusBar barStyle="light-content" backgroundColor={headerColor} />
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        {showAvatar && <View style={styles.avatar} />}
+        {showAvatar && <Image source={PROFILE_PHOTO} style={styles.avatar} />}
         <View style={styles.headerText}>
           <Text style={styles.headerTitle}>{title}</Text>
           <Text style={styles.headerSubtitle}>{subtitle}</Text>

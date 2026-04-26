@@ -9,6 +9,7 @@ import ScreenShell from '@/components/screen-shell';
 import PressureMap from '@/components/pressure-map';
 import { Colors, PressureColors } from '@/constants/theme';
 import { usePressureMonitor } from '@/contexts/PressureMonitorContext';
+import { PROFILE_GREETING_NAME } from '@/constants/profile';
 
 function formatElapsed(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -51,7 +52,7 @@ export default function HomeScreen() {
     <>
       <StatusBar style="light" />
       <ScreenShell
-        title="Hello Jane!"
+        title={`Hello ${PROFILE_GREETING_NAME}!`}
         subtitle="Your Pressure Map, Live"
         showAvatar
         scrollable={false}
@@ -271,7 +272,7 @@ const styles = StyleSheet.create({
   },
   // ── Guidance ──
   guidanceBanner: {
-    backgroundColor: 'rgba(9,146,231,0.22)',
+    backgroundColor: '#013d7c',
     borderRadius: 9,
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -281,7 +282,7 @@ const styles = StyleSheet.create({
   },
   guidanceText: {
     fontSize: 15,
-    color: Colors.textDark,
+    color: '#fff2e4',
     textAlign: 'center',
   },
   // ── Pressure bar & map ──

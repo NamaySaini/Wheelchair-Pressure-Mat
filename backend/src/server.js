@@ -10,6 +10,7 @@ const readingsRoutes = require('./routes/readings');
 const snapshotsRoutes = require('./routes/snapshots');
 const alertsRoutes = require('./routes/alerts');
 const chatRoutes = require('./routes/chat');
+const trackerRoutes = require('./routes/tracker');
 
 const app = express();
 
@@ -28,6 +29,7 @@ app.use('/readings', readingsRoutes);
 app.use('/snapshots', snapshotsRoutes);
 app.use('/alert-events', alertsRoutes);
 app.use('/chat', chatRoutes);
+app.use('/tracker', trackerRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

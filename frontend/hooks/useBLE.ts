@@ -20,6 +20,8 @@ const SERVICE_UUID = '12345678-1234-1234-1234-123456789abc';
 const PRESSURE_CHAR_UUID = '12345678-1234-1234-1234-123456789ab1';
 const CONFIG_CHAR_UUID = '12345678-1234-1234-1234-123456789ab2';
 const DEVICE_NAME = 'PressureMat';
+const CONFIG_CMD_SET_INTERVAL = 0x01;
+const CONFIG_CMD_SET_REMINDER = 0x02;
 
 const GRID_SIZE = 256; // 16 × 16
 const ADC_MAX = 4095;
@@ -171,17 +173,25 @@ export default function useBLE() {
   // ── Write alert interval to CONFIG characteristic ──
   const writeAlertInterval = useCallback(async (ms: number) => {
     if (!deviceRef.current) return;
-    const buf = new ArrayBuffer(4);
-    new DataView(buf).setUint32(0, ms, true); // little-endian
+    const buf = new ArrayBuffer(5);
+    const view = new DataView(buf);
+    view.setUint8(0, CONFIG_CMD_SET_INTERVAL);
+    view.setUint32(1, ms, true); // little-endian
     const bytes = new Uint8Array(buf);
-    // Encode to base64
-    let binary = '';
-    bytes.forEach((b) => (binary += String.fromCharCode(b)));
-    const b64 = btoa(binary);
     await deviceRef.current.writeCharacteristicWithResponseForService(
       SERVICE_UUID,
       CONFIG_CHAR_UUID,
-      b64,
+      encodeBase64(bytes),
+    );
+  }, []);
+
+  const setReminderActive = useCallback(async (active: boolean) => {
+    if (!deviceRef.current) return;
+    const bytes = new Uint8Array([CONFIG_CMD_SET_REMINDER, active ? 1 : 0]);
+    await deviceRef.current.writeCharacteristicWithResponseForService(
+      SERVICE_UUID,
+      CONFIG_CHAR_UUID,
+      encodeBase64(bytes),
     );
   }, []);
 
@@ -217,5 +227,11 @@ export default function useBLE() {
     scan,
     disconnect,
     writeAlertInterval,
+    setReminderActive,
   };
 }
+  function encodeBase64(bytes: Uint8Array): string {
+    let binary = '';
+    bytes.forEach((b) => (binary += String.fromCharCode(b)));
+    return btoa(binary);
+  }

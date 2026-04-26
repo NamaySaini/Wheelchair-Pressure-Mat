@@ -98,12 +98,14 @@ async function buildContext(userId) {
 async function fetchSessionsWithin(userId, days) {
   const since = new Date();
   since.setDate(since.getDate() - days);
+  const nowIso = new Date().toISOString();
   const { data } = await supabase
     .from('sessions')
     .select('duration_sec, alerts_triggered, shifts_completed, compliance_rate, worst_zone, avg_distribution')
     .eq('user_id', userId)
     .not('ended_at', 'is', null)
-    .gte('started_at', since.toISOString());
+    .gte('started_at', since.toISOString())
+    .lte('started_at', nowIso);
   return data || [];
 }
 

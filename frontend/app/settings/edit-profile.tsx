@@ -9,14 +9,16 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  Image,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Colors } from '@/constants/theme';
+import { PROFILE_EMAIL, PROFILE_NAME, PROFILE_PHOTO } from '@/constants/profile';
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const [name, setName] = useState('Jane Doe');
-  const [email, setEmail] = useState('jane.doe@example.com');
+  const [name, setName] = useState(PROFILE_NAME);
+  const [email, setEmail] = useState(PROFILE_EMAIL);
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
@@ -24,7 +26,7 @@ export default function EditProfileScreen() {
 
       {/* Avatar placeholder with edit hint */}
       <View style={styles.avatarSection}>
-        <View style={styles.avatar} />
+        <Image source={PROFILE_PHOTO} style={styles.avatar} />
         <TouchableOpacity style={styles.changePhotoBtn}>
           <Text style={styles.changePhotoText}>Change Photo</Text>
         </TouchableOpacity>

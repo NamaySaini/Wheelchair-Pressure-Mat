@@ -2,12 +2,13 @@
  * Settings — profile card + preferences list.
  */
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenShell from '@/components/screen-shell';
 import { Colors } from '@/constants/theme';
+import { PROFILE_EMAIL, PROFILE_NAME, PROFILE_PHOTO } from '@/constants/profile';
 
 const MENU_ITEMS = [
   { label: 'Reminder Preferences', route: '/settings/reminder-preferences' },
@@ -20,7 +21,7 @@ export default function SettingsScreen() {
 
   return (
     <>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <ScreenShell
         title="Settings"
         subtitle="Manage your profile and preferences"
@@ -32,12 +33,11 @@ export default function SettingsScreen() {
 
           {/* Profile card */}
           <View style={styles.profileCard}>
-            {/* Avatar placeholder */}
-            <View style={styles.avatar} />
+            <Image source={PROFILE_PHOTO} style={styles.avatar} />
 
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>Jane Doe</Text>
-              <Text style={styles.profileEmail}>jane.doe@example.com</Text>
+              <Text style={styles.profileName}>{PROFILE_NAME}</Text>
+              <Text style={styles.profileEmail}>{PROFILE_EMAIL}</Text>
             </View>
 
             {/* Edit button */}
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   profileCard: {
-    backgroundColor: Colors.creamCard,
+    backgroundColor: 'rgba(255,158,87,0.46)',
     borderRadius: 8,
     padding: 14,
     flexDirection: 'row',
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   prefsCard: {
-    backgroundColor: Colors.creamCard,
+    backgroundColor: 'rgba(255,158,87,0.46)',
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,

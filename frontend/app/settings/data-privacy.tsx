@@ -2,8 +2,9 @@
  * Settings — Data Sharing & Privacy
  */
 import React, { useState } from 'react';
-import { View, Text, Switch, ScrollView, StyleSheet } from 'react-native';
-import { Stack } from 'expo-router';
+import { View, Text, Switch, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/theme';
 
 const TOGGLES = [
@@ -25,6 +26,7 @@ const TOGGLES = [
 ] as const;
 
 export default function DataPrivacyScreen() {
+  const router = useRouter();
   const [toggles, setToggles] = useState<Record<string, boolean>>({
     research: true,
     healthcare: false,
@@ -33,7 +35,13 @@ export default function DataPrivacyScreen() {
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: 'Data Sharing & Privacy' }} />
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <Ionicons name="chevron-back" size={22} color="#351601" />
+      </TouchableOpacity>
+
+      <Text style={styles.screenTitle}>Data Sharing & Privacy</Text>
 
       <View style={styles.card}>
         {TOGGLES.map((item, idx) => (
@@ -46,7 +54,7 @@ export default function DataPrivacyScreen() {
               <Switch
                 value={toggles[item.key]}
                 onValueChange={(v) => setToggles((t) => ({ ...t, [item.key]: v }))}
-                trackColor={{ true: Colors.primary }}
+                trackColor={{ true: '#351601', false: '#e2e8f0' }}
                 thumbColor={Colors.white}
               />
             </View>
@@ -64,12 +72,30 @@ export default function DataPrivacyScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.cream },
+  root: { flex: 1, backgroundColor: '#f6fafd' },
   content: { padding: 24, gap: 16 },
+  backBtn: {
+    alignSelf: 'flex-start',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,158,87,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  screenTitle: {
+    fontSize: 25,
+    fontWeight: '800',
+    color: '#351601',
+    marginBottom: 4,
+  },
   card: {
-    backgroundColor: Colors.creamCard,
+    backgroundColor: '#f8fafc',
     borderRadius: 8,
     paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   row: {
     flexDirection: 'row',
@@ -78,12 +104,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   textCol: { flex: 1 },
-  rowLabel: { fontSize: 15, color: Colors.textDark, fontWeight: '500' },
-  rowDesc: { fontSize: 12, color: Colors.textBrown, marginTop: 2 },
-  divider: { height: 1, backgroundColor: 'rgba(30,20,70,0.1)' },
+  rowLabel: { fontSize: 15, color: '#351601', fontWeight: '500' },
+  rowDesc: { fontSize: 12, color: '#647b96', marginTop: 2 },
+  divider: { height: 1, backgroundColor: '#e2e8f0' },
   notice: {
     fontSize: 13,
-    color: Colors.textBrown,
+    color: '#647b96',
     lineHeight: 20,
     textAlign: 'center',
   },

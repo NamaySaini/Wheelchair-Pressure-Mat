@@ -145,7 +145,12 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
     setShiftProgress(0);
     shiftStartRef.current = null;
     currentAlertIdRef.current = null;
-  }, [intervalSec]);
+    if (ble.isConnected) {
+      ble
+        .setReminderActive(false)
+        .catch((e) => console.warn('setReminderActive (reset) failed:', e.message));
+    }
+  }, [ble, intervalSec]);
 
   // When intervalSec changes while idle, restart the countdown visually.
   useEffect(() => {
@@ -174,6 +179,11 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
     if (!activeSessionId) return;
     if (secondsLeft !== 0 || alertPhase !== 'idle') return;
     setAlertPhase('alerting');
+    if (ble.isConnected) {
+      ble
+        .setReminderActive(true)
+        .catch((e) => console.warn('setReminderActive (alert) failed:', e.message));
+    }
     // Create alert_event row
     backendClient
       .createAlertEvent(activeSessionId)
@@ -181,7 +191,7 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
         currentAlertIdRef.current = r.id;
       })
       .catch((e) => console.warn('createAlertEvent failed:', e.message));
-  }, [secondsLeft, alertPhase, activeSessionId]);
+  }, [secondsLeft, alertPhase, activeSessionId, ble]);
 
   // ── Shift detection (runs on every BLE data update) ──
   useEffect(() => {
@@ -327,6 +337,9 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
         ble
           .writeAlertInterval(intervalSec * 1000)
           .catch((e) => console.warn('writeAlertInterval (start) failed:', e.message));
+        ble
+          .setReminderActive(false)
+          .catch((e) => console.warn('setReminderActive (start) failed:', e.message));
       }
     } catch (e: any) {
       console.warn('startSession failed:', e.message);
@@ -353,6 +366,9 @@ export function PressureMonitorProvider({ children }: { children: React.ReactNod
         setLastSessionSummary(res.summary);
         // Mute firmware LED alert until next session
         if (ble.isConnected) {
+          ble
+            .setReminderActive(false)
+            .catch((e) => console.warn('setReminderActive (end) failed:', e.message));
           ble
             .writeAlertInterval(FIRMWARE_MUTE_MS)
             .catch((e) => console.warn('writeAlertInterval (end) failed:', e.message));
