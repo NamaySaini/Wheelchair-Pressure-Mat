@@ -34,23 +34,12 @@ function RootNavigator() {
     }
   }, [inAuthGroup, isLoading, router, session]);
 
-  if (isLoading || (!session && !inAuthGroup) || (session && inAuthGroup)) {
+  if (isLoading) {
     return <LoadingScreen />;
   }
 
-  if (!session) {
-    return (
-      <>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        </Stack>
-        <StatusBar style="dark" />
-      </>
-    );
-  }
-
   return (
-    <PressureMonitorProvider>
+    <PressureMonitorProvider enabled={!!session}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -76,7 +65,7 @@ function RootNavigator() {
         />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
-      <StatusBar style="light" />
+      <StatusBar style={session ? 'light' : 'dark'} />
     </PressureMonitorProvider>
   );
 }

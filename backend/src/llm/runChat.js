@@ -1,5 +1,5 @@
 const supabase = require('../supabase');
-const { groq, DEFAULT_MODEL } = require('./groq');
+const { openai, DEFAULT_MODEL } = require('./openai');
 const { SYSTEM_PROMPT } = require('./systemPrompt');
 const { buildContext } = require('./contextBuilder');
 const { TOOL_DEFS, executeToolCall } = require('./tools');
@@ -13,7 +13,7 @@ function isToolUseFailed(error) {
 
 async function createChatCompletion({ messages, allowTools = true }) {
   try {
-    return await groq.chat.completions.create({
+    return await openai.chat.completions.create({
       model: DEFAULT_MODEL,
       messages,
       ...(allowTools
@@ -26,9 +26,9 @@ async function createChatCompletion({ messages, allowTools = true }) {
   } catch (error) {
     if (!allowTools || !isToolUseFailed(error)) throw error;
 
-    // Some Groq model responses emit pseudo-function markup instead of valid tool calls.
+    // If a provider/model emits invalid tool-call markup, fall back to a plain-text answer.
     // Fall back to a plain-text answer grounded in the existing context/history.
-    return groq.chat.completions.create({
+    return openai.chat.completions.create({
       model: DEFAULT_MODEL,
       messages: [
         ...messages,
@@ -88,7 +88,7 @@ async function runChat({ userId, userMessage }) {
     const resp = await createChatCompletion({ messages, allowTools: true });
 
     const msg = resp.choices?.[0]?.message;
-    if (!msg) throw new Error('No message returned from Groq');
+    if (!msg) throw new Error('No message returned from OpenAI');
 
     messages.push(msg);
 

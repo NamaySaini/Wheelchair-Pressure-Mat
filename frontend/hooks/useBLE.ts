@@ -40,7 +40,7 @@ function decodePayload(base64: string): number[] {
   return values.slice(0, GRID_SIZE);
 }
 
-export default function useBLE() {
+export default function useBLE(enabled = true) {
   const managerRef = useRef<BleManager | null>(null);
   const deviceRef = useRef<Device | null>(null);
   const subRef = useRef<Subscription | null>(null);
@@ -123,6 +123,11 @@ export default function useBLE() {
 
   // ── Scan + auto-connect ──
   const scan = useCallback(async () => {
+    if (!enabled) {
+      setError('Log in before connecting to PressureMat');
+      return;
+    }
+
     const mgr = getManager();
     setError(null);
 
@@ -168,10 +173,11 @@ export default function useBLE() {
         return false;
       });
     }, 15000);
-  }, []);
+  }, [enabled]);
 
   // ── Write alert interval to CONFIG characteristic ──
   const writeAlertInterval = useCallback(async (ms: number) => {
+    if (!enabled) return;
     if (!deviceRef.current) return;
     const buf = new ArrayBuffer(5);
     const view = new DataView(buf);
@@ -183,9 +189,10 @@ export default function useBLE() {
       CONFIG_CHAR_UUID,
       encodeBase64(bytes),
     );
-  }, []);
+  }, [enabled]);
 
   const setReminderActive = useCallback(async (active: boolean) => {
+    if (!enabled) return;
     if (!deviceRef.current) return;
     const bytes = new Uint8Array([CONFIG_CMD_SET_REMINDER, active ? 1 : 0]);
     await deviceRef.current.writeCharacteristicWithResponseForService(
@@ -193,7 +200,7 @@ export default function useBLE() {
       CONFIG_CHAR_UUID,
       encodeBase64(bytes),
     );
-  }, []);
+  }, [enabled]);
 
   // ── Disconnect ──
   const disconnect = useCallback(async () => {
@@ -208,6 +215,13 @@ export default function useBLE() {
     setIsConnected(false);
     setPressureData(null);
   }, []);
+
+  useEffect(() => {
+    if (enabled) return;
+    disconnect();
+    setError(null);
+    setIsScanning(false);
+  }, [disconnect, enabled]);
 
   // Cleanup on unmount
   useEffect(() => {

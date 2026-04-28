@@ -96,9 +96,15 @@ export function usePressureMonitor() {
   return value;
 }
 
-export function PressureMonitorProvider({ children }: { children: React.ReactNode }) {
+export function PressureMonitorProvider({
+  children,
+  enabled = true,
+}: {
+  children: React.ReactNode;
+  enabled?: boolean;
+}) {
   // ── BLE ──
-  const ble = useBLE();
+  const ble = useBLE(enabled);
 
   // ── Timer ──
   const [intervalSec, setIntervalSec] = useState(DEFAULT_INTERVAL_SEC);

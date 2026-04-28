@@ -1,5 +1,5 @@
 const supabase = require('../supabase');
-const { groq, DEFAULT_MODEL } = require('./groq');
+const { openai, DEFAULT_MODEL } = require('./openai');
 
 const SUMMARY_SYSTEM = `You summarize a single wheelchair-sitting session for the user who just finished it.
 
@@ -52,7 +52,7 @@ function parseKeyInsight(text) {
 async function summarizeSession(session) {
   const description = buildSessionDescription(session);
 
-  const resp = await groq.chat.completions.create({
+  const resp = await openai.chat.completions.create({
     model: DEFAULT_MODEL,
     messages: [
       { role: 'system', content: SUMMARY_SYSTEM },
